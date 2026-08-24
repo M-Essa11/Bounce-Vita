@@ -43,10 +43,10 @@ def clear_connected_background(tile):
 
 def main():
     if len(sys.argv) != 3:
-        raise SystemExit("usage: prepare_generated_hd.py INPUT OUTPUT")
+        raise SystemExit("usage: prepare_hd_atlas.py INPUT OUTPUT")
     source = Image.open(sys.argv[1]).convert("RGBA")
     if source.size != (1024, 1536):
-        raise SystemExit(f"Expected 1024x1536 generated atlas, got {source.size}")
+        raise SystemExit(f"Expected a 1024x1536 source atlas, got {source.size}")
     atlas = Image.new("RGBA", (192, 288))
     for row in range(6):
         for column in range(4):
