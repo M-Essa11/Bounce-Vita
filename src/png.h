@@ -1,0 +1,84 @@
+#ifndef PNG_H
+#define PNG_H
+
+#include "platform.h"
+
+// ТОЧНАЯ КОПИЯ вашей структуры texture_t
+typedef struct {
+    void* data;         // Texture data
+    int width;          // Texture width (atlas width, pixels)
+    int height;         // Texture height (atlas height, pixels)
+    int actual_width;   // Actual image width
+    int actual_height;  // Actual image height
+    int format;
+    int is_vram;        // 1 if texture is in VRAM, 0 if in RAM
+    int source_scale;   // Atlas pixel scale; gameplay coordinates stay logical
+} texture_t;
+
+// Sprite rect in atlas pixel coordinates (not normalized UV).
+// This keeps the game/render boundary integer and pixel-perfect.
+typedef struct {
+    int x, y; // top-left in atlas pixels
+    int w, h; // size in atlas pixels
+} sprite_rect_t;
+
+/**
+ * Load PNG file into GU texture (VRAM)
+ */
+texture_t* png_load_texture_vram(const char* path);
+
+/**
+ * Create sprite rectangle for atlas texture
+ */
+sprite_rect_t png_create_sprite_rect(texture_t* tex, int x, int y, int w, int h);
+
+/**
+ * Draw sprite from texture atlas
+ * Ожидается: GU_TEXTURE_2D включён, GU_TCC_RGBA, BLEND включён; при необходимости — GU_ALPHA_TEST (A>0).
+ * Рекомендуется: GU_ALPHA_TEST с порогом >0 для PNG с прозрачностью.
+ */
+void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, int x, int y, int w, int h);
+
+/**
+ * Free texture memory
+ */
+void png_free_texture(texture_t* tex);
+
+
+
+typedef enum {
+    PNG_TRANSFORM_IDENTITY = 0,
+    PNG_TRANSFORM_ROT_90,
+    PNG_TRANSFORM_ROT_180,
+    PNG_TRANSFORM_ROT_270,
+    PNG_TRANSFORM_FLIP_X,
+    PNG_TRANSFORM_FLIP_Y,
+    // Составные трансформации для Java-совместимости
+    PNG_TRANSFORM_ROT_270_FLIP_X,    // ROT_270 + FLIP_X (для Java tileImages[35])
+    PNG_TRANSFORM_ROT_270_FLIP_Y,    // ROT_270 + FLIP_Y (для Java tileImages[34])
+    PNG_TRANSFORM_ROT_270_FLIP_XY    // ROT_270 + FLIP_X + FLIP_Y
+} png_transform_t;
+
+/**
+ * Draw sprite with explicit 4-corner UVs (needed for rotation/mirroring).
+ * Ожидается: GU_TEXTURE_2D включён, GU_TCC_RGBA, BLEND включён; при необходимости — GU_ALPHA_TEST (A>0).
+ * Рекомендуется: GU_ALPHA_TEST с порогом >0 для PNG с прозрачностью.
+ */
+void png_draw_sprite_uv4(texture_t* tex,
+                         int u_tl, int v_tl,
+                         int u_tr, int v_tr,
+                         int u_bl, int v_bl,
+                         int u_br, int v_br,
+                         int x, int y, int w, int h);
+
+/**
+ * Draw sprite with a transform (rotation/mirror) applied to the given sprite rect.
+ * Ожидается: GU_TEXTURE_2D включён, GU_TCC_RGBA, BLEND включён; при необходимости — GU_ALPHA_TEST (A>0).
+ * Рекомендуется: GU_ALPHA_TEST с порогом >0 для PNG с прозрачностью.
+ */
+void png_draw_sprite_transform(texture_t* tex, sprite_rect_t* sprite,
+                           int x, int y, int w, int h,
+                           png_transform_t transform);
+
+
+#endif // PNG_H

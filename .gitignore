@@ -1,0 +1,15 @@
+/build-vita/
+/release/
+/backups/
+
+*.vpk
+*.velf
+*.self
+*.o
+*.d
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
