@@ -32,7 +32,6 @@ Progress is stored at:
 ux0:data/BounceVita/save.dat
 ```
 
-Older saves at `ux0:data/BounceZeroVita/save.dat` are imported automatically.
 
 ## Building
 
