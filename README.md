@@ -2,6 +2,18 @@
 
 Bounce Vita is a native PlayStation Vita port of the classic Nokia Bounce game. It is based on the open-source C reimplementation from [amdray/bounce_zero](https://github.com/amdray/bounce_zero), adapted for VitaSDK with Vita2D rendering, Vita controls, audio, persistent progress, and refreshed presentation assets.
 
+## Screenshots
+
+### Main Menu
+
+![Bounce Vita main menu](docs/screenshots/vita/menu.png)
+
+### Gameplay
+
+![Bounce Vita first level](docs/screenshots/vita/level-1.png)
+
+![Bounce Vita gameplay](docs/screenshots/vita/gameplay.png)
+
 ## Features
 
 - Native PlayStation Vita VPK
@@ -62,7 +74,10 @@ Transfer `bounce_zero_vita.vpk` to a homebrew-enabled PlayStation Vita and insta
 - PlayStation Vita port and presentation updates: [M-Essa11](https://github.com/M-Essa11)
 - VitaSDK and Vita2D contributors
 
+## Support
+
+If you enjoy the project and want to support its development, visit [Ko-fi.com/essa11](https://ko-fi.com/essa11).
+
 ## Legal
 
 The source code is available under the MIT License; see `LICENSE`. Bounce names, characters, and original game assets remain the property of their respective owners. This fan project is not affiliated with or endorsed by Nokia, Sun Microsystems, Sony, or PlayStation.
-
