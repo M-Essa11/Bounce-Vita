@@ -8,14 +8,15 @@
 #include <assert.h>
 
 // Битовые маски для пиксельных коллизий.
-_Static_assert(TILE_SIZE == 12, "TILE_SIZE must stay 12; collision masks in level_masks.inc are tied to 12x12 tiles.");
+typedef char tile_size_must_stay_12[(TILE_SIZE == 12) ? 1 : -1];
 #include "level_masks.inc"
 
 // Forward declarations
-static bool collisionDetection(Player* p, int testX, int testY);
-static bool testTile(Player* p, int tileY, int tileX, bool canMove);
+static bool collisionDetection(Player* p, int testX, int testY, bool redirectOnRamp);
+static bool collisionDetectionWithRampHit(Player* p, int testX, int testY, bool redirectOnRamp, int* hitRampID);
+static bool testTile(Player* p, int tileY, int tileX, bool canMove, bool redirectOnRamp, int* hitRampID);
 static bool squareCollide(Player* p, int tileRow, int tileCol);
-static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID);
+static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID, bool redirectOnRamp);
 static bool thinCollide(Player* p, int tileRow, int tileCol, int tileID);
  
 
@@ -97,15 +98,15 @@ void player_init(Player* p, int x, int y, BallSizeState sizeState) {
     p->isInWater = false;
     
     // Подталкивание большого мяча при инициализации в тесном месте, как в оригинале.
-    if (p->sizeState == LARGE_SIZE_STATE && !collisionDetection(p, p->xPos, p->yPos)) {
+    if (p->sizeState == LARGE_SIZE_STATE && !collisionDetection(p, p->xPos, p->yPos, true)) {
         int offset = STUCK_BALL_OFFSET;
         
         // Порядок приоритета: влево, вверх, влево-вверх.
-        if (collisionDetection(p, p->xPos - offset, p->yPos)) {
+        if (collisionDetection(p, p->xPos - offset, p->yPos, true)) {
             p->xPos -= offset;
-        } else if (collisionDetection(p, p->xPos, p->yPos - offset)) {
+        } else if (collisionDetection(p, p->xPos, p->yPos - offset, true)) {
             p->yPos -= offset;
-        } else if (collisionDetection(p, p->xPos - offset, p->yPos - offset)) {
+        } else if (collisionDetection(p, p->xPos - offset, p->yPos - offset, true)) {
             p->xPos -= offset;
             p->yPos -= offset;
         }
@@ -128,20 +129,20 @@ void enlarge_ball(Player* p) {
         found_free_space = 1;
         
         // Порядок приоритета направлений совпадает с оригиналом.
-        if (collisionDetection(p, p->xPos, p->yPos - offset)) {
+        if (collisionDetection(p, p->xPos, p->yPos - offset, true)) {
             p->yPos -= offset;
-        } else if (collisionDetection(p, p->xPos - offset, p->yPos - offset)) {
+        } else if (collisionDetection(p, p->xPos - offset, p->yPos - offset, true)) {
             p->xPos -= offset;
             p->yPos -= offset;
-        } else if (collisionDetection(p, p->xPos + offset, p->yPos - offset)) {
+        } else if (collisionDetection(p, p->xPos + offset, p->yPos - offset, true)) {
             p->xPos += offset;
             p->yPos -= offset;
-        } else if (collisionDetection(p, p->xPos, p->yPos + offset)) {
+        } else if (collisionDetection(p, p->xPos, p->yPos + offset, true)) {
             p->yPos += offset;
-        } else if (collisionDetection(p, p->xPos - offset, p->yPos + offset)) {
+        } else if (collisionDetection(p, p->xPos - offset, p->yPos + offset, true)) {
             p->xPos -= offset;
             p->yPos += offset;
-        } else if (collisionDetection(p, p->xPos + offset, p->yPos + offset)) {
+        } else if (collisionDetection(p, p->xPos + offset, p->yPos + offset, true)) {
             p->xPos += offset;
             p->yPos += offset;
         } else {
@@ -161,9 +162,9 @@ void shrink_ball(Player* p) {
     
     // Проверка позиции после уменьшения как в оригинале
     int offset = 2;
-    if (collisionDetection(p, p->xPos, p->yPos + offset)) {
+    if (collisionDetection(p, p->xPos, p->yPos + offset, true)) {
         p->yPos += offset;
-    } else if (collisionDetection(p, p->xPos, p->yPos - offset)) {
+    } else if (collisionDetection(p, p->xPos, p->yPos - offset, true)) {
         p->yPos -= offset;
     }
     // Если оба направления заняты - остаемся на месте
@@ -258,7 +259,7 @@ static bool squareCollide(Player* p, int tileRow, int tileCol) {
 }
 
 // Коллизия с треугольной рампой, поведенчески эквивалентная оригиналу.
-static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID) {
+static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID, bool redirectOnRamp) {
     // Координаты тайла в пикселях.
     int i = tileCol * TILE_SIZE;  // paramInt2 * 12
     int j = tileRow * TILE_SIZE;  // paramInt1 * 12
@@ -304,7 +305,7 @@ static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID) {
                 int ballX = b5 - k;
                 if (ballY >= 0 && ballY < ENLARGED_SIZE && ballX >= 0 && ballX < ENLARGED_SIZE &&
                     (TRI_TILE_DATA[abs(b - b2)][abs(b5 - b1)] & largeBallData[ballY][ballX]) != 0) {
-                    if (!p->mGroundedFlag) {
+                    if (redirectOnRamp && !p->mGroundedFlag) {
                         redirectBall(p, tileID);
                     }
                     return true;
@@ -321,7 +322,7 @@ static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID) {
                 int ballX = b5 - k;
                 if (ballY >= 0 && ballY < NORMAL_SIZE && ballX >= 0 && ballX < NORMAL_SIZE &&
                     (TRI_TILE_DATA[abs(b - b2)][abs(b5 - b1)] & smallBallData[ballY][ballX]) != 0) {
-                    if (!p->mGroundedFlag) {
+                    if (redirectOnRamp && !p->mGroundedFlag) {
                         redirectBall(p, tileID);
                     }
                     return true;
@@ -372,8 +373,13 @@ static void redirectBall(Player* p, int tileID) {
     }
 }
 
-// Полная функция проверки коллизий (портировано из Ball.java)
-static bool collisionDetection(Player* p, int testX, int testY) {
+// redirectOnRamp is false for X traversal probes (no ramp impulse), true for Y impacts (preserve ramp bounces).
+static bool collisionDetection(Player* p, int testX, int testY, bool redirectOnRamp) {
+    return collisionDetectionWithRampHit(p, testX, testY, redirectOnRamp, NULL);
+}
+
+static bool collisionDetectionWithRampHit(Player* p, int testX, int testY, bool redirectOnRamp, int* hitRampID) {
+    if (hitRampID) *hitRampID = -1;
     // Временно обновляем глобальные координаты для тестирования
     int b = 0;
     if (testY < 0) {
@@ -403,7 +409,7 @@ static bool collisionDetection(Player* p, int testX, int testY) {
     // НЕ прерываем при canMove == false, чтобы корректно выставлялись флаги
     for (int n = i; n < k; n++) {
         for (int i1 = j; i1 < m; i1++) {
-            canMove = testTile(p, i1, n, canMove);
+            canMove = testTile(p, i1, n, canMove, redirectOnRamp, hitRampID);
         }
     }
     
@@ -411,7 +417,7 @@ static bool collisionDetection(Player* p, int testX, int testY) {
 }
 
 // Проверка конкретного тайла (портировано из Ball.java testTile)
-static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
+static bool testTile(Player* p, int tileY, int tileX, bool canMove, bool redirectOnRamp, int* hitRampID) {
     if (tileY >= g_level.height || tileY < 0 || tileX >= g_level.width || tileX < 0) {
         return false;  // За пределами карты - коллизия
     }
@@ -514,7 +520,8 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
         }
     } else if (tileID >= 30 && tileID <= 37) {
         // Рампы - используют triangleCollide
-        if (triangleCollide(p, tileY, tileX, tileID)) {
+        if (triangleCollide(p, tileY, tileX, tileID, redirectOnRamp)) {
+            if (hitRampID) *hitRampID = tileID;
             canMove = false;
             p->mCDRampFlag = true;
             
@@ -700,7 +707,7 @@ void player_update(Player* p) {
         }
         
         // Попытка движения (Java 989)
-        bool canMoveY = collisionDetection(p, p->xPos, p->yPos + yStep);
+        bool canMoveY = collisionDetection(p, p->xPos, p->yPos + yStep, true);
         if (canMoveY) {
             p->yPos += yStep;
             p->mGroundedFlag = false;
@@ -729,11 +736,11 @@ void player_update(Player* p) {
             // Канон Java: условие только по mCDRampFlag, xSpeed < 10 и slideCntr == 0
             if (p->mCDRampFlag && p->xSpeed < 10 && p->slideCntr == 0) {
                 int slideStep = 1;
-                if (collisionDetection(p, p->xPos + slideStep, p->yPos + yStep)) {
+                if (collisionDetection(p, p->xPos + slideStep, p->yPos + yStep, true)) {
                     p->xPos += slideStep;
                     p->yPos += yStep;
                     p->mCDRampFlag = false;
-                } else if (collisionDetection(p, p->xPos - slideStep, p->yPos + yStep)) {
+                } else if (collisionDetection(p, p->xPos - slideStep, p->yPos + yStep, true)) {
                     p->xPos -= slideStep;
                     p->yPos += yStep;
                     p->mCDRampFlag = false;
@@ -741,7 +748,7 @@ void player_update(Player* p) {
             }
             
             // Отскок от препятствия (Java 1027-1055)
-            if (yStep > 0 || (reverseGrav && yStep < 0)) {
+            if (reverseGrav ? yStep < 0 : yStep > 0) {
                 // Отскок от пола/препятствия (Java: this.ySpeed = this.ySpeed * -1 / 2)
                 // ВАЖНО: умножение на -1 ДО деления даёт правильное округление к нулю
                 p->ySpeed = p->ySpeed * -1 / 2;
@@ -771,7 +778,7 @@ void player_update(Player* p) {
             }
             
             // Удар о потолок (Java 1057-1067)
-            if (yStep < 0 || (reverseGrav && yStep > 0)) {
+            if (reverseGrav ? yStep > 0 : yStep < 0) {
                 if (reverseGrav) {
                     p->ySpeed = -ROOF_COLLISION_SPEED;
                 } else {
@@ -843,26 +850,28 @@ void player_update(Player* p) {
         }
         
         // Обычное движение по X.
-        if (collisionDetection(p, p->xPos + xStep, p->yPos)) {
+        int hitRampID;
+        if (collisionDetectionWithRampHit(p, p->xPos + xStep, p->yPos, false, &hitRampID)) {
             p->xPos += xStep;
-        } else if (p->mCDRampFlag) {
+        } else if (hitRampID >= 30 && hitRampID <= 37) {
             // Диагональное скольжение по рампе.
             p->mCDRampFlag = false; // Флаг может быть выставлен заново внутри collisionDetection().
             int diagonalStep = reverseGrav ? 1 : -1;
 
             // Пробуем диагональ 1: (xStep, diagonalStep)
-            if (collisionDetection(p, p->xPos + xStep, p->yPos + diagonalStep)) {
+            if (collisionDetection(p, p->xPos + xStep, p->yPos + diagonalStep, false)) {
                 p->xPos += xStep;
                 p->yPos += diagonalStep;
             }
             // Пробуем диагональ 2: (xStep, -diagonalStep)
-            else if (collisionDetection(p, p->xPos + xStep, p->yPos - diagonalStep)) {
+            else if (collisionDetection(p, p->xPos + xStep, p->yPos - diagonalStep, false)) {
                 p->xPos += xStep;
                 p->yPos -= diagonalStep;
             }
             // Оригинал: если обе диагонали заблокированы, развернуть и вдвое
             // уменьшить горизонтальную скорость (Ball bytecode 1536-1544).
             else {
+                if (!p->mGroundedFlag) redirectBall(p, hitRampID);
                 p->xSpeed = -(p->xSpeed >> 1);
             }
         }
